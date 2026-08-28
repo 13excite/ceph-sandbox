@@ -1,0 +1,95 @@
+name: ceph-playground
+
+x-ceph-common: &ceph-common
+  image: ceph-playground:tentacle
+  build:
+    context: ./image
+    args:
+      CEPH_RELEASE: ${CEPH_RELEASE:-tentacle}
+      DISTRO_CODENAME: ${DISTRO_CODENAME:-noble}
+  networks: [ceph-net]
+  volumes:
+    - ceph_etc:/etc/ceph
+    - ceph_var_lib:/var/lib/ceph
+  environment: &ceph-common-env
+    CLUSTER: ${CEPH_CLUSTER:-ceph}
+  restart: unless-stopped
+
+services:
+  # "master" node: cluster monitor
+  mon:
+    <<: *ceph-common
+    container_name: ceph-mon
+    hostname: mon0
+    environment:
+      <<: *ceph-common-env
+      CEPH_DAEMON: MON
+    healthcheck:
+      test: ["CMD-SHELL", "ceph --cluster ${CEPH_CLUSTER:-ceph} -k /etc/ceph/${CEPH_CLUSTER:-ceph}.client.admin.keyring -n client.admin --connect-timeout 3 -s"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  # "master" node: cluster manager
+  mgr:
+    <<: *ceph-common
+    container_name: ceph-mgr
+    hostname: mgr0
+    environment:
+      <<: *ceph-common-env
+      CEPH_DAEMON: MGR
+    depends_on:
+      mon:
+        condition: service_healthy
+
+  # "worker" node: object storage daemon (directory-backed, no raw disk needed)
+  osd:
+    <<: *ceph-common
+    container_name: ceph-osd
+    hostname: osd0
+    environment:
+      <<: *ceph-common-env
+      CEPH_DAEMON: OSD
+    depends_on:
+      mon:
+        condition: service_healthy
+
+  # metadata server, needed for CephFS
+  mds:
+    <<: *ceph-common
+    container_name: ceph-mds
+    hostname: mds0
+    environment:
+      <<: *ceph-common-env
+      CEPH_DAEMON: MDS
+      CEPHFS_CREATE: "1"
+    depends_on:
+      mon:
+        condition: service_healthy
+      osd:
+        condition: service_started
+
+  # S3-compatible gateway
+  rgw:
+    <<: *ceph-common
+    container_name: ceph-rgw
+    hostname: rgw0
+    environment:
+      <<: *ceph-common-env
+      CEPH_DAEMON: RGW
+      RGW_NAME: rgw0
+      RGW_PORT: "8080"
+    ports:
+      - "${RGW_PORT:-8080}:8080"
+    depends_on:
+      mon:
+        condition: service_healthy
+      osd:
+        condition: service_started
+
+networks:
+  ceph-net:
+
+volumes:
+  ceph_etc:
+  ceph_var_lib:
