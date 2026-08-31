@@ -5,10 +5,10 @@
 # One image, five roles: which daemon it runs is picked at "docker run" time
 # via $CEPH_DAEMON (mon|mgr|osd|mds|rgw|rgw_user), see entrypoint.sh.
 
-FROM ubuntu:24.04
+FROM debian:12
 
 ARG CEPH_RELEASE=tentacle
-ARG DISTRO_CODENAME=noble
+ARG DISTRO_CODENAME=bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg lsb-release uuid-runtime python3 iproute2 \
