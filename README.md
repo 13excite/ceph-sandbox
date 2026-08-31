@@ -6,12 +6,14 @@ plain `docker compose`, no Kubernetes/cephadm/VM required.
 
 ## Image
 
+Pre-built multi-architecture (amd64/arm64) image available at:
+**[excite13/ceph-daemon:tentacle](https://hub.docker.com/r/excite13/ceph-daemon)**
+
 `image/` is a homemade replacement for the `ceph/daemon` image (that project,
 [ceph-container](https://github.com/ceph/ceph-container), was abandoned in
 2021 and never got past Ceph 16 "Pacific"). It's built straight from Ceph's
-official package repo (`download.ceph.com`) on top of `ubuntu:24.04`, so it
-tracks whatever `CEPH_RELEASE` you point it at - defaults to Ceph 20
-"Tentacle" in `.env`.
+official package repo (`download.ceph.com`) on top of `debian:12` (bookworm),
+tracking Ceph 20 "Tentacle".
 
 One image, five roles - which daemon a container runs is picked at start time
 via `CEPH_DAEMON` (`mon`/`mgr`/`osd`/`mds`/`rgw`/`rgw_user`), dispatched by
@@ -19,10 +21,6 @@ via `CEPH_DAEMON` (`mon`/`mgr`/`osd`/`mds`/`rgw`/`rgw_user`), dispatched by
 daemon bootstraps its own cephx key on first boot straight off the shared
 `client.admin` keyring (no separate bootstrap-key dance) and stays running
 in the foreground.
-
-This has **not been built or run** - only written. First `docker compose up`
-will take a while (apt package install for Ceph is not small) and may need
-adjusting - see "If the build fails" below.
 
 ## Layout
 
@@ -42,8 +40,7 @@ shares `/etc/ceph` across nodes.
 ## Usage
 
 ```sh
-docker compose build           # builds image/Dockerfile once (slow first time)
-docker compose up -d
+docker compose up -d           # pulls pre-built image from Docker Hub
 docker compose exec mon ceph -s
 docker compose exec mon bash   # a shell with the full ceph CLI toolset
 ```
@@ -57,19 +54,32 @@ Tear down (and wipe cluster state):
 docker compose down -v
 ```
 
-### If the build fails
+### Building a custom image
 
-`image/Dockerfile` points at `https://download.ceph.com/debian-${CEPH_RELEASE}/${DISTRO_CODENAME}/`.
-If apt can't find packages there:
+The pre-built image uses Ceph 20 "Tentacle" on Debian 12 (bookworm). To build
+your own version with different releases:
 
-1. Check what Ceph actually calls the codename/release combo at
-   `https://download.ceph.com/debian-tentacle/dists/` (a release this new
-   may initially only publish for one Ubuntu codename, or briefly lag behind
-   the very latest Ubuntu LTS).
-2. Adjust `CEPH_RELEASE` / `DISTRO_CODENAME` in `.env` accordingly (e.g. drop
-   back to `DISTRO_CODENAME=jammy` for Ubuntu 22.04), then `docker compose build`.
-3. As a fallback, `CEPH_RELEASE=squid` (Ceph 19) is the previous stable and
-   more likely to already have full package coverage.
+```sh
+make help               # show available commands
+make build-image        # build for the local platform and load into docker
+make build-image-multi  # build multi-arch (amd64 + arm64), no load
+make push-image         # build multi-arch and push to Docker Hub (requires login)
+```
+
+The image name (`excite13/ceph-daemon`), tag (`tentacle`) and target
+platforms are set at the top of the `Makefile`.
+
+Or invoke buildx directly:
+```sh
+cd image
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t excite13/ceph-daemon:tentacle \
+  --push .
+```
+
+**Note:** Ceph "tentacle" supports Debian 12 (bookworm) and Ubuntu 22.04
+(jammy). Check available releases at
+`https://download.ceph.com/debian-tentacle/dists/`.
 
 ### S3 / RadosGW
 
