@@ -1,12 +1,7 @@
 name: ceph-playground
 
 x-ceph-common: &ceph-common
-  image: ceph-playground:tentacle
-  build:
-    context: ./image
-    args:
-      CEPH_RELEASE: ${CEPH_RELEASE:-tentacle}
-      DISTRO_CODENAME: ${DISTRO_CODENAME:-noble}
+  image: excite13/ceph-daemon:tentacle
   networks: [ceph-net]
   volumes:
     - ceph_etc:/etc/ceph
